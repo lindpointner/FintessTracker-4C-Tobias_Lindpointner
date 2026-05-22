@@ -1,5 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
+	import { user } from '$lib/userStore';
 
 	let name = $state('');
 	let email = $state('');
@@ -22,13 +23,15 @@
 		error = '';
 
 		try {
-			const response = await fetch('/api/auth/register', {
+			const response = await fetch('http://localhost:3000/api/auth/register', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name, email, password })
 			});
 
 			if (response.ok) {
+				const data = await response.json();
+				user.set(data.user);
 				goto('/dashboard');
 			} else {
 				const data = await response.json();
