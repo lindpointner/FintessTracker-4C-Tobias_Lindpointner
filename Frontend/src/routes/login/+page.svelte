@@ -1,6 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { user } from '$lib/userStore';
+	import { t } from '$lib/i18n';
 
 	let email = $state('');
 	let password = $state('');
@@ -9,7 +10,7 @@
 
 	async function handleLogin() {
 		if (!email || !password) {
-			error = 'Bitte alle Felder ausfüllen';
+			error = $t('login.errorFields');
 			return;
 		}
 
@@ -29,10 +30,10 @@
 				goto('/dashboard');
 			} else {
 				const data = await response.json();
-				error = data.message || 'E-Mail oder Passwort falsch';
+				error = data.message || $t('login.errorWrong');
 			}
 		} catch (err) {
-			error = 'Da ist was schiefgelaufen – versuch es nochmal';
+			error = $t('login.errorNetwork');
 		} finally {
 			loading = false;
 		}
@@ -42,25 +43,25 @@
 <div class="page">
 	<div class="card">
 		<h1>💪 FitnessTracker</h1>
-		<p class="subtitle">Einloggen</p>
+		<p class="subtitle">{$t('login.title')}</p>
 
 		<form onsubmit={(e) => { e.preventDefault(); handleLogin(); }}>
-			<label for="email">E-Mail</label>
-			<input type="email" id="email" bind:value={email} placeholder="deine@email.com" disabled={loading} />
+			<label for="email">{$t('login.email')}</label>
+			<input type="email" id="email" bind:value={email} placeholder={$t('login.emailPlaceholder')} disabled={loading} />
 
-			<label for="password">Passwort</label>
-			<input type="password" id="password" bind:value={password} placeholder="Dein Passwort" disabled={loading} />
+			<label for="password">{$t('login.password')}</label>
+			<input type="password" id="password" bind:value={password} placeholder={$t('login.passwordPlaceholder')} disabled={loading} />
 
 			{#if error}
 				<p class="error">{error}</p>
 			{/if}
 
 			<button type="submit" disabled={loading}>
-				{loading ? 'Lädt...' : 'Einloggen'}
+				{loading ? $t('login.loading') : $t('login.submit')}
 			</button>
 		</form>
 
-		<p class="hint">Noch kein Account? <a href="/register">Registrieren</a></p>
+		<p class="hint">{$t('login.noAccount')} <a href="/register">{$t('login.registerLink')}</a></p>
 	</div>
 </div>
 

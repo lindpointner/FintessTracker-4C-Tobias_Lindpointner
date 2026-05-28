@@ -1,6 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { user } from '$lib/userStore';
+	import { t } from '$lib/i18n';
 
 	let name = $state('');
 	let email = $state('');
@@ -11,11 +12,11 @@
 
 	async function handleRegister() {
 		if (!name || !email || !password || !confirmPassword) {
-			error = 'Bitte alle Felder ausfüllen';
+			error = $t('register.errorFields');
 			return;
 		}
 		if (password !== confirmPassword) {
-			error = 'Passwörter stimmen nicht überein';
+			error = $t('register.errorPasswords');
 			return;
 		}
 
@@ -35,10 +36,10 @@
 				goto('/dashboard');
 			} else {
 				const data = await response.json();
-				error = data.message || 'Registrierung hat nicht geklappt';
+				error = data.message || $t('register.errorFailed');
 			}
 		} catch (err) {
-			error = 'Da ist was schiefgelaufen – versuch es nochmal';
+			error = $t('register.errorNetwork');
 		} finally {
 			loading = false;
 		}
@@ -48,31 +49,31 @@
 <div class="page">
 	<div class="card">
 		<h1>💪 FitnessTracker</h1>
-		<p class="subtitle">Account erstellen</p>
+		<p class="subtitle">{$t('register.title')}</p>
 
 		<form onsubmit={(e) => { e.preventDefault(); handleRegister(); }}>
-			<label for="name">Name</label>
-			<input type="text" id="name" bind:value={name} placeholder="Max Mustermann" disabled={loading} />
+			<label for="name">{$t('register.name')}</label>
+			<input type="text" id="name" bind:value={name} placeholder={$t('register.namePlaceholder')} disabled={loading} />
 
-			<label for="email">E-Mail</label>
-			<input type="email" id="email" bind:value={email} placeholder="deine@email.com" disabled={loading} />
+			<label for="email">{$t('register.email')}</label>
+			<input type="email" id="email" bind:value={email} placeholder={$t('register.emailPlaceholder')} disabled={loading} />
 
-			<label for="password">Passwort</label>
-			<input type="password" id="password" bind:value={password} placeholder="Mind. 6 Zeichen" disabled={loading} />
+			<label for="password">{$t('register.password')}</label>
+			<input type="password" id="password" bind:value={password} placeholder={$t('register.passwordPlaceholder')} disabled={loading} />
 
-			<label for="confirm-password">Passwort wiederholen</label>
-			<input type="password" id="confirm-password" bind:value={confirmPassword} placeholder="Nochmal eingeben" disabled={loading} />
+			<label for="confirm-password">{$t('register.confirmPassword')}</label>
+			<input type="password" id="confirm-password" bind:value={confirmPassword} placeholder={$t('register.confirmPlaceholder')} disabled={loading} />
 
 			{#if error}
 				<p class="error">{error}</p>
 			{/if}
 
 			<button type="submit" disabled={loading}>
-				{loading ? 'Lädt...' : 'Registrieren'}
+				{loading ? $t('register.loading') : $t('register.submit')}
 			</button>
 		</form>
 
-		<p class="hint">Schon einen Account? <a href="/login">Einloggen</a></p>
+		<p class="hint">{$t('register.hasAccount')} <a href="/login">{$t('register.loginLink')}</a></p>
 	</div>
 </div>
 
