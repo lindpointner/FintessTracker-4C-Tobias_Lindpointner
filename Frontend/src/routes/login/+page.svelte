@@ -1,6 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
-	import { user } from '$lib/userStore';
+	import { user, token } from '$lib/userStore';
 	import { t } from '$lib/i18n';
 
 	let email = $state('');
@@ -27,6 +27,7 @@
 			if (response.ok) {
 				const data = await response.json();
 				user.set(data.user);
+				token.set(data.token);
 				goto('/dashboard');
 			} else {
 				const data = await response.json();
