@@ -117,7 +117,48 @@
 
 	const mealIcons = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' };
 
-	$effect(() => { loadLog(); });
+	// Water tracker
+	const GLASS_ML = 250;
+	const WATER_GOAL = 2000;
+	const GLASS_COUNT = WATER_GOAL / GLASS_ML; // 8 Gläser à 250ml = 2L
+
+	let waterMl = $state(0);
+	let filledGlasses = $derived(Math.round(waterMl / GLASS_ML));
+
+	async function loadWater() {
+		try {
+			const res = await fetch(`${API}/api/water?date=${today}`, {
+				headers: { Authorization: `Bearer ${$token}` }
+			});
+			if (res.ok) {
+				const data = await res.json();
+				waterMl = data.total_ml || 0;
+			}
+		} catch {}
+	}
+
+	async function setWater(ml) {
+		const prev = waterMl;
+		waterMl = ml; // optimistisch
+		try {
+			const res = await fetch(`${API}/api/water`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${$token}` },
+				body: JSON.stringify({ total_ml: ml })
+			});
+			if (!res.ok) waterMl = prev;
+		} catch {
+			waterMl = prev;
+		}
+	}
+
+	function toggleGlass(n) {
+		// Klick auf das oberste volle Glas leert es wieder, sonst bis n auffüllen
+		const target = filledGlasses === n ? n - 1 : n;
+		setWater(target * GLASS_ML);
+	}
+
+	$effect(() => { loadLog(); loadWater(); });
 </script>
 
 <div class="page">
@@ -192,6 +233,30 @@
 				</div>
 			</div>
 		{/if}
+	</div>
+
+	<!-- Water tracker -->
+	<div class="water-card">
+		<div class="water-head">
+			<span class="water-title">💧 {$t('nutrition.water')}</span>
+			<span class="water-amount">{(waterMl / 1000).toFixed(2)}<small> / 2 L</small></span>
+		</div>
+		<div class="glasses">
+			{#each Array(GLASS_COUNT) as _, i}
+				<button
+					class="glass"
+					class:filled={i < filledGlasses}
+					onclick={() => toggleGlass(i + 1)}
+					aria-label={`${(i + 1) * GLASS_ML} ml`}
+					title={`${(i + 1) * GLASS_ML} ml`}
+				>
+					<svg viewBox="0 0 24 24" width="30" height="30">
+						<path d="M6 4 H18 L16.4 20.3 A1.3 1.3 0 0 1 15.1 21.5 H8.9 A1.3 1.3 0 0 1 7.6 20.3 Z" />
+					</svg>
+				</button>
+			{/each}
+		</div>
+		<div class="water-hint">{$t('nutrition.waterHint')}</div>
 	</div>
 
 	<!-- Daily log -->
@@ -487,4 +552,70 @@
 		color: #e08080;
 		background: rgba(220, 100, 100, 0.1);
 	}
+
+	/* Water tracker */
+	.water-card {
+		background: #1a1f2e;
+		border: 1px solid #2a3040;
+		border-radius: 12px;
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.water-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.water-title { font-size: 14px; font-weight: 600; color: #888; }
+
+	.water-amount {
+		font-size: 18px;
+		font-weight: 700;
+		color: #4ab8e2;
+	}
+
+	.water-amount small { font-size: 12px; font-weight: 500; color: #555; }
+
+	.glasses {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.glass {
+		background: none;
+		border: none;
+		padding: 4px;
+		cursor: pointer;
+		color: #3a4256;
+		transition: transform 0.12s, color 0.15s;
+	}
+
+	.glass:hover {
+		transform: translateY(-2px) scale(1.05);
+		color: #4ab8e2;
+	}
+
+	.glass svg { display: block; }
+
+	.glass path {
+		fill: rgba(74, 184, 226, 0);
+		stroke: currentColor;
+		stroke-width: 1.5;
+		stroke-linejoin: round;
+		transition: fill 0.2s, stroke 0.2s;
+	}
+
+	.glass.filled { color: #4ab8e2; }
+
+	.glass.filled path {
+		fill: rgba(74, 184, 226, 0.85);
+		stroke: #6fc9ec;
+	}
+
+	.water-hint { font-size: 12px; color: #555; }
 </style>

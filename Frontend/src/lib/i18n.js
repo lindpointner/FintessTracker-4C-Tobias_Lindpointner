@@ -93,6 +93,8 @@ const translations = {
 		'nutrition.kcal': 'kcal',
 		'nutrition.emptyLog': 'Noch nichts eingetragen.',
 		'nutrition.noKcal': 'k.A.',
+		'nutrition.water': 'Wasser',
+		'nutrition.waterHint': 'Ein Glas = 250 ml',
 	},
 	en: {
 
@@ -205,6 +207,8 @@ const translations = {
 		'nutrition.kcal': 'kcal',
 		'nutrition.emptyLog': 'Nothing logged yet.',
 		'nutrition.noKcal': 'n/a',
+		'nutrition.water': 'Water',
+		'nutrition.waterHint': 'One glass = 250 ml',
 
 		'workouts.title': 'Workouts',
 		'workouts.add': 'Add Workout',

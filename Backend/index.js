@@ -159,6 +159,30 @@ app.delete('/api/nutrition/:id', verifyToken, (req, res) => {
     res.json({ message: 'Gelöscht' });
 });
 
+//Water
+
+app.get('/api/water', verifyToken, (req, res) => {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const row = db.prepare(
+        'SELECT COALESCE(SUM(amount_ml), 0) AS total_ml FROM water_logs WHERE user_id = ? AND date = ?'
+    ).get(req.user.id, date);
+    res.json({ total_ml: row.total_ml });
+});
+
+app.put('/api/water', verifyToken, (req, res) => {
+    const date = req.body.date || new Date().toISOString().split('T')[0];
+    const totalMl = Math.round(Number(req.body.total_ml));
+    if (!Number.isFinite(totalMl) || totalMl < 0)
+        return res.status(400).json({ message: 'Ungültige Menge' });
+
+    db.prepare('DELETE FROM water_logs WHERE user_id = ? AND date = ?').run(req.user.id, date);
+    if (totalMl > 0) {
+        db.prepare('INSERT INTO water_logs (user_id, amount_ml, date) VALUES (?, ?, ?)')
+          .run(req.user.id, totalMl, date);
+    }
+    res.json({ total_ml: totalMl });
+});
+
 app.listen(PORT, () => {
     console.log(`Server läuft auf http://localhost:${PORT}`);
 });
