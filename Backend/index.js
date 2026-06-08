@@ -21,7 +21,7 @@ function verifyToken(req, res, next) {
     });
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+//Auth
 
 app.post('/api/auth/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -52,7 +52,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
 });
 
-// ── Profile ───────────────────────────────────────────────────────────────────
+//Profile
 
 app.get('/api/profile', verifyToken, (req, res) => {
     const userData = db.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').get(req.user.id);
@@ -110,32 +110,53 @@ app.post('/api/profile/measurements', verifyToken, (req, res) => {
     res.status(201).json({ weight_kg, height_cm, bmi });
 });
 
-// ── Workouts ──────────────────────────────────────────────────────────────────
+//Nutrition
 
-app.get('/api/workouts', verifyToken, (req, res) => {
-    const workouts = db.prepare('SELECT * FROM workout_sessions WHERE user_id = ? ORDER BY date DESC').all(req.user.id);
-    res.json(workouts);
+app.get('/api/nutrition', verifyToken, (req, res) => {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const entries = db.prepare(`
+        SELECT ml.id, fi.name, fi.calories_per_100g, ml.amount_g, ml.meal_type, ml.date,
+               ROUND(fi.calories_per_100g * ml.amount_g / 100) AS total_kcal
+        FROM meal_logs ml
+        JOIN food_items fi ON ml.food_item_id = fi.id
+        WHERE ml.user_id = ? AND ml.date = ?
+        ORDER BY ml.id ASC
+    `).all(req.user.id, date);
+    res.json(entries);
 });
 
-app.post('/api/workouts', verifyToken, (req, res) => {
-    const { title, duration_min, notes } = req.body;
-    if (!title)
-        return res.status(400).json({ message: 'Titel ist Pflicht' });
+app.post('/api/nutrition', verifyToken, (req, res) => {
+    const { food_name, calories_per_100g, amount_g, meal_type } = req.body;
+    if (!food_name || calories_per_100g == null || !amount_g)
+        return res.status(400).json({ message: 'Fehlende Felder' });
+
+    let foodItem = db.prepare('SELECT id FROM food_items WHERE name = ?').get(food_name);
+    if (!foodItem) {
+        const r = db.prepare('INSERT INTO food_items (name, calories_per_100g) VALUES (?, ?)').run(food_name, calories_per_100g);
+        foodItem = { id: r.lastInsertRowid };
+    }
 
     const result = db.prepare(
-        'INSERT INTO workout_sessions (user_id, title, duration_min, notes) VALUES (?, ?, ?, ?)'
-    ).run(req.user.id, title, duration_min || 0, notes || null);
-    const workout = db.prepare('SELECT * FROM workout_sessions WHERE id = ?').get(result.lastInsertRowid);
-    res.status(201).json(workout);
+        'INSERT INTO meal_logs (user_id, food_item_id, meal_type, amount_g) VALUES (?, ?, ?, ?)'
+    ).run(req.user.id, foodItem.id, meal_type || 'snack', amount_g);
+
+    const entry = db.prepare(`
+        SELECT ml.id, fi.name, fi.calories_per_100g, ml.amount_g, ml.meal_type, ml.date,
+               ROUND(fi.calories_per_100g * ml.amount_g / 100) AS total_kcal
+        FROM meal_logs ml
+        JOIN food_items fi ON ml.food_item_id = fi.id
+        WHERE ml.id = ?
+    `).get(result.lastInsertRowid);
+
+    res.status(201).json(entry);
 });
 
-app.delete('/api/workouts/:id', verifyToken, (req, res) => {
+app.delete('/api/nutrition/:id', verifyToken, (req, res) => {
     const id = parseInt(req.params.id);
-    const workout = db.prepare('SELECT id FROM workout_sessions WHERE id = ? AND user_id = ?').get(id, req.user.id);
-    if (!workout) return res.status(404).json({ message: 'Workout nicht gefunden' });
-
-    db.prepare('DELETE FROM workout_sessions WHERE id = ?').run(id);
-    res.json({ message: 'Workout gelöscht' });
+    const entry = db.prepare('SELECT id FROM meal_logs WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!entry) return res.status(404).json({ message: 'Eintrag nicht gefunden' });
+    db.prepare('DELETE FROM meal_logs WHERE id = ?').run(id);
+    res.json({ message: 'Gelöscht' });
 });
 
 app.listen(PORT, () => {

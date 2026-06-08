@@ -23,6 +23,7 @@
 			<a href="/dashboard" class:active={$page.url.pathname === '/dashboard'}>{$t('nav.overview')}</a>
 			<a href="/dashboard/workouts" class:active={$page.url.pathname === '/dashboard/workouts'}>{$t('nav.workouts')}</a>
 			<a href="/dashboard/stats" class:active={$page.url.pathname === '/dashboard/stats'}>{$t('nav.stats')}</a>
+			<a href="/dashboard/nutrition" class:active={$page.url.pathname === '/dashboard/nutrition'}>{$t('nav.nutrition')}</a>
 			<a href="/dashboard/profile" class:active={$page.url.pathname === '/dashboard/profile'}>{$t('nav.profile')}</a>
 		</div>
 		<button class="lang-btn" onclick={toggleLocale}>{$locale === 'de' ? '🇬🇧 EN' : '🇩🇪 DE'}</button>
