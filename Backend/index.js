@@ -183,6 +183,88 @@ app.put('/api/water', verifyToken, (req, res) => {
     res.json({ total_ml: totalMl });
 });
 
+//Workouts
+
+// Hängt an jede Session ihre Übungen (aggregiert: Sätze gezählt, Wdh./Gewicht)
+function attachExercises(sessions) {
+    if (sessions.length === 0) return sessions;
+    const ids = sessions.map(s => s.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = db.prepare(`
+        SELECT ws.session_id, ex.name,
+               COUNT(*)        AS sets,
+               MAX(ws.reps)    AS reps,
+               MAX(ws.weight_kg) AS weight_kg
+        FROM workout_sets ws
+        JOIN exercises ex ON ws.exercise_id = ex.id
+        WHERE ws.session_id IN (${placeholders})
+        GROUP BY ws.session_id, ws.exercise_id, ex.name
+        ORDER BY ws.session_id, MIN(ws.set_number)
+    `).all(...ids);
+
+    const bySession = {};
+    for (const r of rows) (bySession[r.session_id] ||= []).push(r);
+    return sessions.map(s => ({ ...s, exercises: bySession[s.id] || [] }));
+}
+
+app.get('/api/workouts', verifyToken, (req, res) => {
+    const sessions = db.prepare(
+        'SELECT id, title, duration_min, notes, date FROM workout_sessions WHERE user_id = ? ORDER BY date DESC, id DESC'
+    ).all(req.user.id);
+    res.json(attachExercises(sessions));
+});
+
+app.post('/api/workouts', verifyToken, (req, res) => {
+    const { title, duration_min, notes, exercises } = req.body;
+    if (!title || !title.trim())
+        return res.status(400).json({ message: 'Titel ist Pflicht' });
+
+    const insertSession = db.prepare(
+        'INSERT INTO workout_sessions (user_id, title, duration_min, notes) VALUES (?, ?, ?, ?)'
+    );
+    const findExercise = db.prepare('SELECT id FROM exercises WHERE name = ?');
+    const insertExercise = db.prepare('INSERT INTO exercises (name) VALUES (?)');
+    const insertSet = db.prepare(
+        'INSERT INTO workout_sets (session_id, exercise_id, set_number, reps, weight_kg) VALUES (?, ?, ?, ?, ?)'
+    );
+
+    const create = db.transaction(() => {
+        const r = insertSession.run(req.user.id, title.trim(), parseInt(duration_min) || 0, notes?.trim() || null);
+        const sessionId = r.lastInsertRowid;
+
+        for (const ex of (Array.isArray(exercises) ? exercises : [])) {
+            const name = (ex.name || '').trim();
+            if (!name) continue;
+            let row = findExercise.get(name);
+            if (!row) row = { id: insertExercise.run(name).lastInsertRowid };
+
+            const setCount = Math.min(20, Math.max(1, parseInt(ex.sets) || 1));
+            const reps = parseInt(ex.reps) || 0;
+            const weight = parseFloat(ex.weight_kg);
+            for (let i = 1; i <= setCount; i++) {
+                insertSet.run(sessionId, row.id, i, reps, Number.isFinite(weight) ? weight : null);
+            }
+        }
+        return sessionId;
+    });
+
+    const sessionId = create();
+    const session = db.prepare(
+        'SELECT id, title, duration_min, notes, date FROM workout_sessions WHERE id = ?'
+    ).get(sessionId);
+    res.status(201).json(attachExercises([session])[0]);
+});
+
+app.delete('/api/workouts/:id', verifyToken, (req, res) => {
+    const id = parseInt(req.params.id);
+    const session = db.prepare('SELECT id FROM workout_sessions WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!session) return res.status(404).json({ message: 'Workout nicht gefunden' });
+
+    db.prepare('DELETE FROM workout_sets WHERE session_id = ?').run(id);
+    db.prepare('DELETE FROM workout_sessions WHERE id = ?').run(id);
+    res.json({ message: 'Gelöscht' });
+});
+
 app.listen(PORT, () => {
     console.log(`Server läuft auf http://localhost:${PORT}`);
 });

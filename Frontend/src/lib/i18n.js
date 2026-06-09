@@ -95,8 +95,6 @@ const translations = {
 		'nutrition.noKcal': 'k.A.',
 		'nutrition.water': 'Wasser',
 		'nutrition.waterHint': 'Ein Glas = 250 ml',
-	},
-	en: {
 
 		'workouts.title': 'Workouts',
 		'workouts.add': 'Workout hinzufügen',
@@ -121,6 +119,18 @@ const translations = {
 		'workouts.save': 'Speichern',
 		'workouts.saving': 'Speichert...',
 		'workouts.errorTitle': 'Bitte einen Titel eingeben',
+		'workouts.exercise': 'Übung',
+		'workouts.exercisePlaceholder': 'z.B. Bankdrücken',
+		'workouts.sets': 'Sätze',
+		'workouts.reps': 'Wdh.',
+		'workouts.weight': 'kg',
+		'workouts.addExercise': 'Übung hinzufügen',
+		'workouts.noExercises': 'Keine Übungen',
+		'workouts.restTimer': 'Rest-Timer',
+		'workouts.start': 'Start',
+		'workouts.pause': 'Pause',
+		'workouts.reset': 'Zurücksetzen',
+		'workouts.done': 'Fertig!',
 	},
 	en: {
 		'nav.overview': 'Overview',
@@ -233,6 +243,18 @@ const translations = {
 		'workouts.save': 'Save',
 		'workouts.saving': 'Saving...',
 		'workouts.errorTitle': 'Please enter a title',
+		'workouts.exercise': 'Exercise',
+		'workouts.exercisePlaceholder': 'e.g. Bench Press',
+		'workouts.sets': 'Sets',
+		'workouts.reps': 'Reps',
+		'workouts.weight': 'kg',
+		'workouts.addExercise': 'Add Exercise',
+		'workouts.noExercises': 'No exercises',
+		'workouts.restTimer': 'Rest Timer',
+		'workouts.start': 'Start',
+		'workouts.pause': 'Pause',
+		'workouts.reset': 'Reset',
+		'workouts.done': 'Done!',
 	}
 };
 
