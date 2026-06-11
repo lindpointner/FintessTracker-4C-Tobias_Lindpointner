@@ -126,13 +126,15 @@ app.get('/api/nutrition', verifyToken, (req, res) => {
 });
 
 app.post('/api/nutrition', verifyToken, (req, res) => {
-    const { food_name, calories_per_100g, amount_g, meal_type } = req.body;
+    const { food_name, calories_per_100g, amount_g, meal_type, protein_per_100g, carbs_per_100g, fat_per_100g } = req.body;
     if (!food_name || calories_per_100g == null || !amount_g)
         return res.status(400).json({ message: 'Fehlende Felder' });
 
     let foodItem = db.prepare('SELECT id FROM food_items WHERE name = ?').get(food_name);
     if (!foodItem) {
-        const r = db.prepare('INSERT INTO food_items (name, calories_per_100g) VALUES (?, ?)').run(food_name, calories_per_100g);
+        const r = db.prepare(
+            'INSERT INTO food_items (name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g) VALUES (?, ?, ?, ?, ?)'
+        ).run(food_name, calories_per_100g, Number(protein_per_100g) || 0, Number(carbs_per_100g) || 0, Number(fat_per_100g) || 0);
         foodItem = { id: r.lastInsertRowid };
     }
 
@@ -263,6 +265,192 @@ app.delete('/api/workouts/:id', verifyToken, (req, res) => {
     db.prepare('DELETE FROM workout_sets WHERE session_id = ?').run(id);
     db.prepare('DELETE FROM workout_sessions WHERE id = ?').run(id);
     res.json({ message: 'Gelöscht' });
+});
+
+//Stats
+
+// Verschiebt ein 'YYYY-MM-DD'-Datum um delta Tage
+function shiftDate(d, delta) {
+    const dt = new Date(d + 'T00:00:00Z');
+    dt.setUTCDate(dt.getUTCDate() + delta);
+    return dt.toISOString().split('T')[0];
+}
+
+// Berechnet aktuelle und längste Streak aus sortierten, eindeutigen Aktiv-Tagen.
+// Die streaks-Tabelle wird bewusst nicht gepflegt: on-the-fly bleibt auch nach
+// Löschungen korrekt und braucht keine Hooks in allen POST-Endpoints.
+function computeStreaks(dates) {
+    const set = new Set(dates);
+    let longest = 0;
+    for (const d of dates) {
+        if (set.has(shiftDate(d, -1))) continue; // kein Ketten-Anfang
+        let len = 1;
+        let cur = d;
+        while (set.has(shiftDate(cur, 1))) {
+            cur = shiftDate(cur, 1);
+            len++;
+        }
+        if (len > longest) longest = len;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    let current = 0;
+    let cur = set.has(today) ? today : shiftDate(today, -1);
+    while (set.has(cur)) {
+        current++;
+        cur = shiftDate(cur, -1);
+    }
+    return { current, longest };
+}
+
+app.get('/api/stats', verifyToken, (req, res) => {
+    const uid = req.user.id;
+    const days = Math.min(365, Math.max(7, parseInt(req.query.days) || 30));
+    const since = `-${days - 1} days`;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Streak: jeder Tag mit Workout, Mahlzeit oder Wasser zählt als aktiv
+    const activeDates = db.prepare(`
+        SELECT DISTINCT date(date) AS d FROM workout_sessions WHERE user_id = ?
+        UNION SELECT date FROM meal_logs WHERE user_id = ?
+        UNION SELECT date FROM water_logs WHERE user_id = ?
+        ORDER BY d
+    `).all(uid, uid, uid).map(r => r.d);
+    const { current, longest } = computeStreaks(activeDates);
+    const activeDays30 = activeDates.filter(d => d >= shiftDate(today, -29)).length;
+
+    // Workouts
+    const wTotals = db.prepare(
+        'SELECT COUNT(*) AS total, COALESCE(SUM(duration_min), 0) AS total_min FROM workout_sessions WHERE user_id = ?'
+    ).get(uid);
+    const wWeek = db.prepare(
+        "SELECT COUNT(*) AS c FROM workout_sessions WHERE user_id = ? AND date(date) >= date('now', '-6 days')"
+    ).get(uid);
+    const wSets = db.prepare(`
+        SELECT COUNT(*) AS total_sets,
+               COALESCE(SUM(ws.reps * COALESCE(ws.weight_kg, 0)), 0) AS volume_kg,
+               ROUND(AVG(ws.rest_sec)) AS avg_rest_sec
+        FROM workout_sets ws
+        JOIN workout_sessions s ON ws.session_id = s.id
+        WHERE s.user_id = ?
+    `).get(uid);
+
+    const firstWorkout = db.prepare(
+        'SELECT MIN(date(date)) AS first FROM workout_sessions WHERE user_id = ?'
+    ).get(uid);
+    let avgPerWeek = 0;
+    if (wTotals.total > 0 && firstWorkout.first) {
+        const daysSince = Math.max(1, (new Date(today) - new Date(firstWorkout.first)) / 86400000 + 1);
+        avgPerWeek = Math.round((wTotals.total / Math.max(1, daysSince / 7)) * 10) / 10;
+    }
+
+    const perWeek = db.prepare(`
+        SELECT strftime('%Y-%W', date) AS week,
+               MIN(date(date, 'weekday 0', '-6 days')) AS week_start,
+               COUNT(*) AS count
+        FROM workout_sessions
+        WHERE user_id = ? AND date(date) >= date('now', '-55 days')
+        GROUP BY week ORDER BY week
+    `).all(uid);
+
+    // Ernährung
+    const nutritionPerDay = db.prepare(`
+        SELECT ml.date AS date,
+               ROUND(SUM(fi.calories_per_100g * ml.amount_g / 100)) AS kcal,
+               ROUND(SUM(fi.protein_per_100g  * ml.amount_g / 100), 1) AS protein_g,
+               ROUND(SUM(fi.carbs_per_100g    * ml.amount_g / 100), 1) AS carbs_g,
+               ROUND(SUM(fi.fat_per_100g      * ml.amount_g / 100), 1) AS fat_g
+        FROM meal_logs ml
+        JOIN food_items fi ON ml.food_item_id = fi.id
+        WHERE ml.user_id = ? AND ml.date >= date('now', ?)
+        GROUP BY ml.date ORDER BY ml.date
+    `).all(uid, since);
+    const todayNutrition = nutritionPerDay.find(r => r.date === today);
+    const avgKcal = nutritionPerDay.length
+        ? Math.round(nutritionPerDay.reduce((s, r) => s + r.kcal, 0) / nutritionPerDay.length)
+        : 0;
+    const macros = nutritionPerDay.reduce(
+        (m, r) => ({
+            protein_g: Math.round((m.protein_g + r.protein_g) * 10) / 10,
+            carbs_g: Math.round((m.carbs_g + r.carbs_g) * 10) / 10,
+            fat_g: Math.round((m.fat_g + r.fat_g) * 10) / 10
+        }),
+        { protein_g: 0, carbs_g: 0, fat_g: 0 }
+    );
+
+    // Wasser
+    const waterPerDay = db.prepare(`
+        SELECT date, SUM(amount_ml) AS ml FROM water_logs
+        WHERE user_id = ? AND date >= date('now', ?)
+        GROUP BY date ORDER BY date
+    `).all(uid, since);
+    const todayWater = waterPerDay.find(r => r.date === today);
+    const waterAvg = db.prepare(`
+        SELECT ROUND(AVG(day_ml)) AS avg_ml FROM (
+            SELECT SUM(amount_ml) AS day_ml FROM water_logs WHERE user_id = ? GROUP BY date
+        )
+    `).get(uid);
+
+    // Körper
+    const latestBody = db.prepare(
+        'SELECT weight_kg, height_cm, bmi, body_fat_percent, date FROM body_measurements WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 1'
+    ).get(uid);
+    const bodyHistory = db.prepare(
+        'SELECT date, weight_kg, bmi, body_fat_percent FROM body_measurements WHERE user_id = ? ORDER BY date ASC, id ASC'
+    ).all(uid);
+
+    // Schlaf
+    const sleep = db.prepare(`
+        SELECT COUNT(*) AS count,
+               ROUND(AVG(duration_min)) AS avg_duration_min,
+               ROUND(AVG(quality), 1) AS avg_quality
+        FROM sleep_logs WHERE user_id = ?
+    `).get(uid);
+
+    // Trainingspläne
+    const plans = db.prepare(
+        'SELECT id, name, description, created_at FROM training_plans WHERE user_id = ? ORDER BY created_at DESC'
+    ).all(uid);
+
+    // Progress-Fotos
+    const photoCount = db.prepare('SELECT COUNT(*) AS count FROM progress_photos WHERE user_id = ?').get(uid);
+    const latestPhoto = db.prepare(
+        'SELECT file_path, note, date FROM progress_photos WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 1'
+    ).get(uid);
+
+    res.json({
+        days,
+        streak: { current, longest, activeDays30 },
+        workouts: {
+            total: wTotals.total,
+            totalMin: wTotals.total_min,
+            thisWeek: wWeek.c,
+            avgPerWeek,
+            totalSets: wSets.total_sets,
+            volumeKg: Math.round(wSets.volume_kg),
+            avgRestSec: wSets.avg_rest_sec,
+            perWeek: perWeek.map(r => ({ weekStart: r.week_start, count: r.count }))
+        },
+        nutrition: {
+            todayKcal: todayNutrition ? todayNutrition.kcal : 0,
+            avgKcal,
+            macros,
+            perDay: nutritionPerDay
+        },
+        water: {
+            todayMl: todayWater ? todayWater.ml : 0,
+            avgMl: waterAvg.avg_ml || 0,
+            perDay: waterPerDay
+        },
+        body: { latest: latestBody || null, history: bodyHistory },
+        sleep: {
+            count: sleep.count,
+            avgDurationMin: sleep.avg_duration_min,
+            avgQuality: sleep.avg_quality
+        },
+        plans: { count: plans.length, list: plans },
+        photos: { count: photoCount.count, latest: latestPhoto || null }
+    });
 });
 
 app.listen(PORT, () => {

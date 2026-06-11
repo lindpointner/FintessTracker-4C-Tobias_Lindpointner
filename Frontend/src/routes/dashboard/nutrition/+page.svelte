@@ -30,7 +30,10 @@
 				.map(p => ({
 					name: p.product_name,
 					brand: p.brands || '',
-					kcal: Math.round(p.nutriments['energy-kcal_100g'])
+					kcal: Math.round(p.nutriments['energy-kcal_100g']),
+					protein: Math.round((p.nutriments.proteins_100g || 0) * 10) / 10,
+					carbs: Math.round((p.nutriments.carbohydrates_100g || 0) * 10) / 10,
+					fat: Math.round((p.nutriments.fat_100g || 0) * 10) / 10
 				}))
 				.slice(0, 8);
 		} catch {
@@ -72,6 +75,9 @@
 				body: JSON.stringify({
 					food_name: selected.name,
 					calories_per_100g: selected.kcal,
+					protein_per_100g: selected.protein || 0,
+					carbs_per_100g: selected.carbs || 0,
+					fat_per_100g: selected.fat || 0,
 					amount_g: parseFloat(addAmount),
 					meal_type: addMealType
 				})
