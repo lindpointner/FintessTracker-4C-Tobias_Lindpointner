@@ -12,10 +12,9 @@
 		'Liegestütze', 'Plank', 'Ausfallschritte', 'Wadenheben'
 	];
 
-	// ---------- Workouts ----------
 	let workouts = $state([]);
 	let loading = $state(true);
-	let filter = $state('all'); // all | week | month
+	let filter = $state('all');
 	let expanded = $state(null);
 
 	let showModal = $state(false);
@@ -46,8 +45,6 @@
 		showModal = true;
 	}
 
-	// Wird über "Workout starten" auf der Pläne-Seite aufgerufen:
-	// ?plan=<id>&day=<id> befüllt das Modal mit den Übungen des Plan-Tags
 	let prefillDone = false;
 	async function prefillFromPlan() {
 		if (prefillDone) return;
@@ -199,7 +196,6 @@
 		return (w.notes && w.notes.trim()) || (w.exercises && w.exercises.length > 0);
 	}
 
-	// ---------- Rest-Timer ----------
 	const PRESETS = [60, 90, 120, 180];
 	const RING = 2 * Math.PI * 52;
 
@@ -289,7 +285,6 @@
 		<button class="btn-primary" onclick={openModal}>+ {$t('workouts.add')}</button>
 	</div>
 
-	<!-- Stats -->
 	<div class="stats">
 		<div class="stat">
 			<span class="stat-num">{totalCount}</span>
@@ -305,7 +300,6 @@
 		</div>
 	</div>
 
-	<!-- Rest timer -->
 	<div class="timer-card">
 		<div class="timer-head">
 			<span class="timer-title">⏱️ {$t('workouts.restTimer')}</span>
@@ -338,14 +332,12 @@
 		</div>
 	</div>
 
-	<!-- Filters -->
 	<div class="filters">
 		<button class:active={filter === 'all'} onclick={() => (filter = 'all')}>{$t('workouts.filterAll')}</button>
 		<button class:active={filter === 'week'} onclick={() => (filter = 'week')}>{$t('workouts.filterWeek')}</button>
 		<button class:active={filter === 'month'} onclick={() => (filter = 'month')}>{$t('workouts.filterMonth')}</button>
 	</div>
 
-	<!-- List -->
 	<div class="list">
 		{#if loading}
 			<p class="empty">{$t('workouts.loading')}</p>
@@ -398,7 +390,6 @@
 	</div>
 </div>
 
-<!-- Add modal -->
 {#if showModal}
 	<div class="modal-overlay">
 		<button class="modal-backdrop" aria-label={$t('workouts.cancel')} onclick={closeModal}></button>
@@ -422,7 +413,6 @@
 					<input id="w-duration" type="number" min="0" bind:value={form.duration_min} placeholder="0" />
 				</div>
 
-				<!-- Exercise builder -->
 				<div class="field">
 					<span class="field-label">{$t('workouts.exercises')}</span>
 					<div class="ex-head">
@@ -500,7 +490,6 @@
 
 	h2 { margin: 0; font-size: 22px; }
 
-	/* Stats */
 	.stats {
 		display: flex;
 		gap: 12px;
@@ -526,7 +515,6 @@
 
 	.stat-label { font-size: 12px; color: #888; }
 
-	/* Rest timer */
 	.timer-card {
 		background: #1a1f2e;
 		border: 1px solid #2a3040;
@@ -630,7 +618,6 @@
 		text-align: center;
 	}
 
-	/* Filters */
 	.filters {
 		display: flex;
 		gap: 6px;
@@ -657,7 +644,6 @@
 		font-weight: 600;
 	}
 
-	/* List */
 	.list { display: flex; flex-direction: column; gap: 10px; }
 
 	.empty { margin: 0; color: #555; font-size: 14px; }
@@ -782,7 +768,6 @@
 		white-space: pre-wrap;
 	}
 
-	/* Buttons */
 	.btn-primary {
 		padding: 8px 16px;
 		background: #4a90e2;
@@ -813,7 +798,6 @@
 
 	.btn-secondary:hover { background: #2e3850; color: #e0e0e0; }
 
-	/* Modal */
 	.modal-overlay {
 		position: fixed;
 		inset: 0;
@@ -882,7 +866,6 @@
 
 	input:focus, textarea:focus { border-color: #4a90e2; }
 
-	/* Exercise builder */
 	.ex-head,
 	.ex-row {
 		display: grid;
@@ -952,5 +935,58 @@
 		display: flex;
 		gap: 10px;
 		justify-content: flex-end;
+	}
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.stats { flex-wrap: wrap; }
+
+		.stat {
+			flex: 1 1 40%;
+			padding: 12px 14px;
+		}
+
+		.stat-num { font-size: 19px; }
+
+		.timer-body {
+			flex-direction: column;
+			gap: 14px;
+		}
+
+		.timer-controls {
+			width: 100%;
+			flex-direction: row;
+		}
+
+		.workout-main {
+			flex-wrap: wrap;
+			padding: 12px 14px;
+		}
+
+		.workout-info { flex: 1 1 100%; }
+
+		.workout-right {
+			width: 100%;
+			justify-content: flex-end;
+		}
+
+		.modal-overlay { padding: 12px; }
+
+		.modal {
+			padding: 16px;
+			max-height: 92vh;
+		}
+
+		.ex-head,
+		.ex-row {
+			grid-template-columns: 1fr 44px 44px 56px 24px;
+			gap: 4px;
+		}
+
+		.modal-actions button { flex: 1; }
 	}
 </style>

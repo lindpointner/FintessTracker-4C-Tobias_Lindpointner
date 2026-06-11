@@ -81,7 +81,6 @@
 
 	h2 { margin: 0; font-size: 22px; }
 
-	/* Stat tiles */
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -115,7 +114,6 @@
 
 	.tile-label { font-size: 12px; color: #888; }
 
-	/* Section quick links */
 	.sections {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -161,5 +159,26 @@
 	.section-arrow {
 		font-size: 22px;
 		color: #4a90e2;
+	}
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.tiles {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		.tile { padding: 14px; }
+
+		.tile-num { font-size: 22px; }
+
+		.sections {
+			grid-template-columns: 1fr;
+		}
+
+		.section-card { padding: 14px 16px; }
 	}
 </style>

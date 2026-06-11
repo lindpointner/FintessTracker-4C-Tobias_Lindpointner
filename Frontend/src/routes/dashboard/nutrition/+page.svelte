@@ -123,10 +123,9 @@
 
 	const mealIcons = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍎' };
 
-	// Water tracker
 	const GLASS_ML = 250;
 	const WATER_GOAL = 2000;
-	const GLASS_COUNT = WATER_GOAL / GLASS_ML; // 8 Gläser à 250ml = 2L
+	const GLASS_COUNT = WATER_GOAL / GLASS_ML;
 
 	let waterMl = $state(0);
 	let filledGlasses = $derived(Math.round(waterMl / GLASS_ML));
@@ -145,7 +144,7 @@
 
 	async function setWater(ml) {
 		const prev = waterMl;
-		waterMl = ml; // optimistisch
+		waterMl = ml;
 		try {
 			const res = await fetch(`${API}/api/water`, {
 				method: 'PUT',
@@ -159,7 +158,6 @@
 	}
 
 	function toggleGlass(n) {
-		// Klick auf das oberste volle Glas leert es wieder, sonst bis n auffüllen
 		const target = filledGlasses === n ? n - 1 : n;
 		setWater(target * GLASS_ML);
 	}
@@ -176,7 +174,6 @@
 		</div>
 	</div>
 
-	<!-- Search -->
 	<div class="search-wrap">
 		<div class="search-box">
 			<svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -192,7 +189,6 @@
 			{/if}
 		</div>
 
-		<!-- Results -->
 		{#if searchResults.length > 0 && !selected}
 			<ul class="results">
 				{#each searchResults as item}
@@ -211,7 +207,6 @@
 			<p class="no-results">{$t('nutrition.noResults')}</p>
 		{/if}
 
-		<!-- Add form -->
 		{#if selected}
 			<div class="add-form">
 				<div class="add-form-title">
@@ -241,7 +236,6 @@
 		{/if}
 	</div>
 
-	<!-- Water tracker -->
 	<div class="water-card">
 		<div class="water-head">
 			<span class="water-title">💧 {$t('nutrition.water')}</span>
@@ -265,7 +259,6 @@
 		<div class="water-hint">{$t('nutrition.waterHint')}</div>
 	</div>
 
-	<!-- Daily log -->
 	<div class="log">
 		{#if logLoading}
 			<p class="empty">Lädt...</p>
@@ -331,7 +324,6 @@
 
 	.total-label { font-size: 11px; color: #555; }
 
-	/* Search */
 	.search-wrap {
 		display: flex;
 		flex-direction: column;
@@ -409,7 +401,6 @@
 
 	.no-results { margin: 8px 0 0; font-size: 13px; color: #555; padding-left: 4px; }
 
-	/* Add form */
 	.add-form {
 		margin-top: 4px;
 		background: #1a1f2e;
@@ -495,7 +486,6 @@
 
 	.btn-secondary:hover { background: #2e3850; color: #e0e0e0; }
 
-	/* Log */
 	.log { display: flex; flex-direction: column; gap: 12px; }
 
 	.empty { margin: 0; color: #555; font-size: 14px; }
@@ -560,7 +550,6 @@
 		background: rgba(220, 100, 100, 0.1);
 	}
 
-	/* Water tracker */
 	.water-card {
 		background: #1a1f2e;
 		border: 1px solid #2a3040;
@@ -625,4 +614,22 @@
 	}
 
 	.water-hint { font-size: 12px; color: #555; }
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.add-form-row {
+			flex-direction: column;
+			gap: 10px;
+		}
+
+		.add-form-actions button { flex: 1; }
+
+		.glasses { justify-content: space-between; }
+
+		.log-entry { padding: 10px 12px; }
+	}
 </style>

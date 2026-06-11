@@ -86,8 +86,6 @@
 		return           { key: 'profile.bmiObese',              color: '#e06060' };
 	});
 
-	// Maps BMI value to bar position (%) respecting the flex segment widths
-	// Segments: under(flex 3, <18.5) | normal(flex 6.5, 18.5-25) | over(flex 5, 25-30) | obese(flex 10, ≥30)
 	let bmiBarPercent = $derived.by(() => {
 		if (bmi === null) return 0;
 		const total = 24.5;
@@ -113,7 +111,6 @@
 		} catch {}
 	}
 
-	// Körperfett nach US-Navy-Formel (metrisch, log10)
 	let gender = $state('m');
 	let neck = $state('');
 	let waist = $state('');
@@ -177,7 +174,6 @@
 <div class="page">
 	<h2>{$t('profile.title')}</h2>
 
-	<!-- Account -->
 	<section class="card">
 		<h3>{$t('profile.account')}</h3>
 		<div class="fields">
@@ -195,7 +191,6 @@
 		<button onclick={saveAccount} disabled={accountLoading}>{$t('profile.saveAccount')}</button>
 	</section>
 
-	<!-- Password -->
 	<section class="card">
 		<h3>{$t('profile.password')}</h3>
 		<div class="fields">
@@ -217,7 +212,6 @@
 		<button onclick={savePassword} disabled={pwLoading}>{$t('profile.savePassword')}</button>
 	</section>
 
-	<!-- Body / BMI -->
 	<section class="card">
 		<h3>{$t('profile.body')}</h3>
 		{#if lastMeasurement}
@@ -256,7 +250,6 @@
 			</div>
 		{/if}
 
-		<!-- Körperfett (US Navy) -->
 		<h3 class="subhead">{$t('profile.bodyFatTitle')}</h3>
 		<div class="fields body-fields">
 			<div class="field">
@@ -491,5 +484,28 @@
 		border-radius: 2px;
 		transform: translateX(-50%);
 		box-shadow: 0 0 4px rgba(0,0,0,0.5);
+	}
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.card { padding: 16px; }
+
+		.body-fields {
+			flex-wrap: wrap;
+			gap: 12px;
+		}
+
+		.body-fields .field {
+			flex: 1 1 40%;
+			min-width: 120px;
+		}
+
+		button {
+			align-self: stretch;
+		}
 	}
 </style>

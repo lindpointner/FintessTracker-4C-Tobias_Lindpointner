@@ -14,8 +14,6 @@ const SECRET = 'fitnesstracker_secret';
 app.use(cors());
 app.use(express.json());
 
-// Foto-Uploads: Dateien in Backend/uploads/, statisch ausgeliefert
-// (ohne Auth, damit <img src> direkt funktioniert)
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_DIR));
@@ -40,7 +38,6 @@ function verifyToken(req, res, next) {
     });
 }
 
-//Auth
 
 app.post('/api/auth/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -71,7 +68,6 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
 });
 
-//Profile
 
 app.get('/api/profile', verifyToken, (req, res) => {
     const userData = db.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').get(req.user.id);
@@ -134,7 +130,6 @@ app.post('/api/profile/measurements', verifyToken, (req, res) => {
     res.status(201).json({ weight_kg, height_cm, bmi, body_fat_percent: bodyFat });
 });
 
-//Nutrition
 
 app.get('/api/nutrition', verifyToken, (req, res) => {
     const date = req.query.date || new Date().toISOString().split('T')[0];
@@ -185,7 +180,6 @@ app.delete('/api/nutrition/:id', verifyToken, (req, res) => {
     res.json({ message: 'Gelöscht' });
 });
 
-//Water
 
 app.get('/api/water', verifyToken, (req, res) => {
     const date = req.query.date || new Date().toISOString().split('T')[0];
@@ -209,9 +203,7 @@ app.put('/api/water', verifyToken, (req, res) => {
     res.json({ total_ml: totalMl });
 });
 
-//Workouts
 
-// Hängt an jede Session ihre Übungen (aggregiert: Sätze gezählt, Wdh./Gewicht)
 function attachExercises(sessions) {
     if (sessions.length === 0) return sessions;
     const ids = sessions.map(s => s.id);
@@ -245,7 +237,6 @@ app.post('/api/workouts', verifyToken, (req, res) => {
     if (!title || !title.trim())
         return res.status(400).json({ message: 'Titel ist Pflicht' });
 
-    // plan_id nur übernehmen, wenn der Plan dem User gehört
     let planId = null;
     if (plan_id) {
         const plan = db.prepare('SELECT id FROM training_plans WHERE id = ? AND user_id = ?').get(plan_id, req.user.id);
@@ -298,9 +289,7 @@ app.delete('/api/workouts/:id', verifyToken, (req, res) => {
     res.json({ message: 'Gelöscht' });
 });
 
-//Trainingspläne
 
-// Lädt Pläne inkl. Tagen und Übungen verschachtelt
 function getPlansNested(userId, planId = null) {
     const plans = planId
         ? db.prepare('SELECT id, name, description, created_at FROM training_plans WHERE user_id = ? AND id = ?').all(userId, planId)
@@ -332,7 +321,6 @@ function getPlansNested(userId, planId = null) {
     return plans.map(p => ({ ...p, days: daysByPlan[p.id] || [] }));
 }
 
-// Fügt Tage + Übungen eines Plans ein (innerhalb einer Transaktion aufrufen)
 function insertPlanDays(planId, days) {
     const insertDay = db.prepare('INSERT INTO plan_days (plan_id, day_number, name) VALUES (?, ?, ?)');
     const findExercise = db.prepare('SELECT id FROM exercises WHERE name = ?');
@@ -397,7 +385,6 @@ app.put('/api/plans/:id', verifyToken, (req, res) => {
     if (!name || !name.trim())
         return res.status(400).json({ message: 'Name ist Pflicht' });
 
-    // Tage/Übungen komplett neu schreiben statt Diff – einfach und robust
     const update = db.transaction(() => {
         db.prepare('UPDATE training_plans SET name = ?, description = ? WHERE id = ?')
             .run(name.trim(), description?.trim() || null, id);
@@ -426,7 +413,6 @@ app.delete('/api/plans/:id', verifyToken, (req, res) => {
     res.json({ message: 'Gelöscht' });
 });
 
-//Schlaf
 
 app.get('/api/sleep', verifyToken, (req, res) => {
     const entries = db.prepare(
@@ -445,7 +431,6 @@ app.post('/api/sleep', verifyToken, (req, res) => {
     if (!Number.isInteger(q) || q < 1 || q > 5)
         return res.status(400).json({ message: 'Ungültige Qualität' });
 
-    // Zubettgehzeit nach der Aufwachzeit → Einschlafen war am Vortag
     const startDay = bed_time > wake_time ? shiftDate(day, -1) : day;
     const sleepStart = `${startDay} ${bed_time}`;
     const sleepEnd = `${day} ${wake_time}`;
@@ -473,7 +458,6 @@ app.delete('/api/sleep/:id', verifyToken, (req, res) => {
     res.json({ message: 'Gelöscht' });
 });
 
-//Progress-Fotos
 
 app.post('/api/photos', verifyToken, upload.single('photo'), (req, res) => {
     if (!req.file)
@@ -508,23 +492,18 @@ app.delete('/api/photos/:id', verifyToken, (req, res) => {
     res.json({ message: 'Gelöscht' });
 });
 
-//Stats
 
-// Verschiebt ein 'YYYY-MM-DD'-Datum um delta Tage
 function shiftDate(d, delta) {
     const dt = new Date(d + 'T00:00:00Z');
     dt.setUTCDate(dt.getUTCDate() + delta);
     return dt.toISOString().split('T')[0];
 }
 
-// Berechnet aktuelle und längste Streak aus sortierten, eindeutigen Aktiv-Tagen.
-// Die streaks-Tabelle wird bewusst nicht gepflegt: on-the-fly bleibt auch nach
-// Löschungen korrekt und braucht keine Hooks in allen POST-Endpoints.
 function computeStreaks(dates) {
     const set = new Set(dates);
     let longest = 0;
     for (const d of dates) {
-        if (set.has(shiftDate(d, -1))) continue; // kein Ketten-Anfang
+        if (set.has(shiftDate(d, -1))) continue;
         let len = 1;
         let cur = d;
         while (set.has(shiftDate(cur, 1))) {
@@ -550,7 +529,6 @@ app.get('/api/stats', verifyToken, (req, res) => {
     const since = `-${days - 1} days`;
     const today = new Date().toISOString().split('T')[0];
 
-    // Streak: jeder Tag mit Workout, Mahlzeit oder Wasser zählt als aktiv
     const activeDates = db.prepare(`
         SELECT DISTINCT date(date) AS d FROM workout_sessions WHERE user_id = ?
         UNION SELECT date FROM meal_logs WHERE user_id = ?
@@ -560,7 +538,6 @@ app.get('/api/stats', verifyToken, (req, res) => {
     const { current, longest } = computeStreaks(activeDates);
     const activeDays30 = activeDates.filter(d => d >= shiftDate(today, -29)).length;
 
-    // Workouts
     const wTotals = db.prepare(
         'SELECT COUNT(*) AS total, COALESCE(SUM(duration_min), 0) AS total_min FROM workout_sessions WHERE user_id = ?'
     ).get(uid);
@@ -594,7 +571,6 @@ app.get('/api/stats', verifyToken, (req, res) => {
         GROUP BY week ORDER BY week
     `).all(uid);
 
-    // Ernährung
     const nutritionPerDay = db.prepare(`
         SELECT ml.date AS date,
                ROUND(SUM(fi.calories_per_100g * ml.amount_g / 100)) AS kcal,
@@ -619,7 +595,6 @@ app.get('/api/stats', verifyToken, (req, res) => {
         { protein_g: 0, carbs_g: 0, fat_g: 0 }
     );
 
-    // Wasser
     const waterPerDay = db.prepare(`
         SELECT date, SUM(amount_ml) AS ml FROM water_logs
         WHERE user_id = ? AND date >= date('now', ?)
@@ -632,7 +607,6 @@ app.get('/api/stats', verifyToken, (req, res) => {
         )
     `).get(uid);
 
-    // Körper
     const latestBody = db.prepare(
         'SELECT weight_kg, height_cm, bmi, body_fat_percent, date FROM body_measurements WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 1'
     ).get(uid);
@@ -640,7 +614,6 @@ app.get('/api/stats', verifyToken, (req, res) => {
         'SELECT date, weight_kg, bmi, body_fat_percent FROM body_measurements WHERE user_id = ? ORDER BY date ASC, id ASC'
     ).all(uid);
 
-    // Schlaf
     const sleep = db.prepare(`
         SELECT COUNT(*) AS count,
                ROUND(AVG(duration_min)) AS avg_duration_min,
@@ -654,12 +627,10 @@ app.get('/api/stats', verifyToken, (req, res) => {
         GROUP BY date ORDER BY date
     `).all(uid, since);
 
-    // Trainingspläne
     const plans = db.prepare(
         'SELECT id, name, description, created_at FROM training_plans WHERE user_id = ? ORDER BY created_at DESC'
     ).all(uid);
 
-    // Progress-Fotos
     const photoCount = db.prepare('SELECT COUNT(*) AS count FROM progress_photos WHERE user_id = ?').get(uid);
     const latestPhoto = db.prepare(
         'SELECT file_path, note, date FROM progress_photos WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 1'

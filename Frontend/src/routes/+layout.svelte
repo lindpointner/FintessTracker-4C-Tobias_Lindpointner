@@ -37,6 +37,12 @@
 {@render children()}
 
 <style>
+	:global(*),
+	:global(*::before),
+	:global(*::after) {
+		box-sizing: border-box;
+	}
+
 	:global(body) {
 		margin: 0;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -110,5 +116,44 @@
 		top: 16px;
 		right: 16px;
 		z-index: 100;
+	}
+
+	@media (max-width: 768px) {
+		nav {
+			flex-wrap: wrap;
+			height: auto;
+			gap: 8px;
+			padding: 10px 16px;
+		}
+
+		.logo {
+			flex: 1;
+			font-size: 16px;
+		}
+
+		.tabs {
+			order: 3;
+			flex-basis: 100%;
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+			margin: 0 -16px;
+			padding: 0 16px 4px;
+		}
+
+		.tabs::-webkit-scrollbar { display: none; }
+
+		.tabs a {
+			white-space: nowrap;
+			padding: 8px 12px;
+		}
+	}
+
+	@media (max-width: 640px) {
+		:global(input),
+		:global(select),
+		:global(textarea) {
+			font-size: 16px !important;
+		}
 	}
 </style>

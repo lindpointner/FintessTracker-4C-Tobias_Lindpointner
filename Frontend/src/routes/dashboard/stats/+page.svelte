@@ -49,7 +49,6 @@
 		return $t('profile.bmiObese');
 	}
 
-	// ---------- Chart-Daten ----------
 	let workoutChart = $derived.by(() => {
 		if (!stats || stats.workouts.perWeek.length === 0) return null;
 		return {
@@ -191,7 +190,6 @@
 	{#if loading && !stats}
 		<p class="empty">{$t('stats.loading')}</p>
 	{:else if stats}
-		<!-- Streak -->
 		<div class="streak-banner">
 			<div class="streak-main">
 				<span class="streak-flame">🔥</span>
@@ -214,7 +212,6 @@
 			</div>
 		</div>
 
-		<!-- Workouts -->
 		<div class="section">
 			<h3>🏋️ {$t('stats.sectionWorkouts')}</h3>
 			<div class="stats">
@@ -255,7 +252,6 @@
 			{/if}
 		</div>
 
-		<!-- Körper / BMI -->
 		<div class="section">
 			<h3>⚖️ {$t('stats.sectionBody')}</h3>
 			{#if stats.body.latest}
@@ -284,7 +280,6 @@
 			{/if}
 		</div>
 
-		<!-- Ernährung -->
 		<div class="section">
 			<h3>🍽️ {$t('stats.sectionNutrition')}</h3>
 			<div class="stats">
@@ -313,7 +308,6 @@
 			{/if}
 		</div>
 
-		<!-- Wasser -->
 		<div class="section">
 			<h3>💧 {$t('stats.sectionWater')}</h3>
 			<div class="stats">
@@ -333,7 +327,6 @@
 			{/if}
 		</div>
 
-		<!-- Schlaf -->
 		<div class="section">
 			<h3>😴 {$t('stats.sectionSleep')}</h3>
 			{#if stats.sleep.count > 0}
@@ -360,7 +353,6 @@
 			{/if}
 		</div>
 
-		<!-- Trainingspläne -->
 		<div class="section">
 			<h3>📋 {$t('stats.sectionPlans')}</h3>
 			{#if stats.plans.count > 0}
@@ -377,7 +369,6 @@
 			{/if}
 		</div>
 
-		<!-- Fortschrittsfotos -->
 		<div class="section">
 			<h3>📸 {$t('stats.sectionPhotos')}</h3>
 			{#if stats.photos.count > 0}
@@ -420,7 +411,6 @@
 
 	h2 { margin: 0; font-size: 22px; }
 
-	/* Filters */
 	.filters {
 		display: flex;
 		gap: 6px;
@@ -447,7 +437,6 @@
 		font-weight: 600;
 	}
 
-	/* Streak banner */
 	.streak-banner {
 		background: linear-gradient(135deg, #1e2438 0%, #1a1f2e 100%);
 		border: 1px solid #2a4070;
@@ -508,7 +497,6 @@
 
 	.streak-label { font-size: 12px; color: #888; }
 
-	/* Sections */
 	.section {
 		background: #1a1f2e;
 		border: 1px solid #2a3040;
@@ -539,7 +527,6 @@
 		width: 100%;
 	}
 
-	/* Stat tiles */
 	.stats {
 		display: flex;
 		gap: 12px;
@@ -572,7 +559,6 @@
 
 	.empty { margin: 0; color: #555; font-size: 14px; }
 
-	/* Plans */
 	.plan-list {
 		list-style: none;
 		margin: 0;
@@ -595,4 +581,34 @@
 	.plan-name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
 
 	.plan-desc { font-size: 12px; color: #888; }
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.streak-banner { padding: 16px; }
+
+		.streak-side {
+			width: 100%;
+			justify-content: space-between;
+			gap: 16px;
+		}
+
+		.streak-stat { align-items: flex-start; }
+
+		.section { padding: 14px; }
+
+		.stat {
+			min-width: 0;
+			flex: 1 1 40%;
+			padding: 12px 14px;
+		}
+
+		.stat-num {
+			font-size: 17px;
+			white-space: normal;
+		}
+	}
 </style>

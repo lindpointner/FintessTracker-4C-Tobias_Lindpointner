@@ -230,7 +230,6 @@
 	</div>
 </div>
 
-<!-- Create/edit modal -->
 {#if showModal}
 	<div class="modal-overlay">
 		<button class="modal-backdrop" aria-label={$t('plans.cancel')} onclick={closeModal}></button>
@@ -334,7 +333,6 @@
 
 	h2 { margin: 0; font-size: 22px; }
 
-	/* List */
 	.list { display: flex; flex-direction: column; gap: 10px; }
 
 	.empty { margin: 0; color: #555; font-size: 14px; }
@@ -476,7 +474,6 @@
 
 	.ex-meta { color: #4a90e2; font-size: 13px; white-space: nowrap; }
 
-	/* Buttons */
 	.btn-primary {
 		padding: 8px 16px;
 		background: #4a90e2;
@@ -507,7 +504,6 @@
 
 	.btn-secondary:hover { background: #2e3850; color: #e0e0e0; }
 
-	/* Modal */
 	.modal-overlay {
 		position: fixed;
 		inset: 0;
@@ -575,7 +571,6 @@
 
 	input:focus { border-color: #4a90e2; }
 
-	/* Day blocks in modal */
 	.day-block {
 		display: flex;
 		flex-direction: column;
@@ -594,7 +589,6 @@
 
 	.day-name-input { flex: 1; }
 
-	/* Exercise builder */
 	.ex-head,
 	.ex-row {
 		display: grid;
@@ -669,5 +663,46 @@
 		display: flex;
 		gap: 10px;
 		justify-content: flex-end;
+	}
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.plan-main {
+			flex-wrap: wrap;
+			padding: 12px 14px;
+		}
+
+		.plan-info { flex: 1 1 100%; }
+
+		.plan-right {
+			width: 100%;
+			justify-content: flex-end;
+		}
+
+		.day-head {
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+
+		.modal-overlay { padding: 12px; }
+
+		.modal {
+			padding: 16px;
+			max-height: 92vh;
+		}
+
+		.day-block { padding: 10px; }
+
+		.ex-head,
+		.ex-row {
+			grid-template-columns: 1fr 44px 44px 56px 24px;
+			gap: 4px;
+		}
+
+		.modal-actions button { flex: 1; }
 	}
 </style>

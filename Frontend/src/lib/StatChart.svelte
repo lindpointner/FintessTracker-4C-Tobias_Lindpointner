@@ -36,7 +36,6 @@
 	}
 
 	$effect(() => {
-		// Chart.js mutiert data → nie Svelte-Proxies übergeben
 		const chart = new Chart(canvas, {
 			type,
 			data: $state.snapshot(data),

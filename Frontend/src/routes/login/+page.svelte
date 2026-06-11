@@ -185,4 +185,14 @@
 	.hint a:hover {
 		text-decoration: underline;
 	}
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 16px;
+			align-items: flex-start;
+			padding-top: 12vh;
+		}
+
+		.card { padding: 24px 20px; }
+	}
 </style>

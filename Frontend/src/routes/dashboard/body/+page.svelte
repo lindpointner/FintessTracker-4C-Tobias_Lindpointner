@@ -8,7 +8,6 @@
 		return new Date().toISOString().split('T')[0];
 	}
 
-	// ---------- Schlaf ----------
 	let sleepEntries = $state([]);
 	let sleepLoading = $state(true);
 	let sleepDate = $state(today());
@@ -91,7 +90,6 @@
 		return '★'.repeat(q) + '☆'.repeat(5 - q);
 	}
 
-	// ---------- Progress-Fotos ----------
 	let photos = $state([]);
 	let photosLoading = $state(true);
 	let photoFile = $state(null);
@@ -178,7 +176,6 @@
 		}
 	}
 
-	// Vorher/Nachher immer chronologisch sortiert anzeigen
 	let comparePair = $derived.by(() => {
 		if (compare.length !== 2) return null;
 		return [...compare].sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -190,7 +187,6 @@
 <div class="page">
 	<h2>{$t('body.title')}</h2>
 
-	<!-- Schlaf -->
 	<section class="card">
 		<h3>😴 {$t('sleep.title')}</h3>
 
@@ -245,7 +241,6 @@
 		</div>
 	</section>
 
-	<!-- Progress-Fotos -->
 	<section class="card">
 		<div class="photos-head">
 			<h3>📸 {$t('photos.title')}</h3>
@@ -410,7 +405,6 @@
 
 	.empty { margin: 0; color: #555; font-size: 14px; }
 
-	/* Schlaf */
 	.sleep-form {
 		display: flex;
 		gap: 14px;
@@ -501,7 +495,6 @@
 		background: rgba(220, 100, 100, 0.1);
 	}
 
-	/* Fotos */
 	.photos-head {
 		display: flex;
 		justify-content: space-between;
@@ -661,5 +654,40 @@
 	.photo-delete:hover {
 		color: #fff;
 		background: rgba(220, 100, 100, 0.8);
+	}
+
+	@media (max-width: 640px) {
+		.page {
+			padding: 20px 16px;
+			gap: 18px;
+		}
+
+		.card { padding: 16px; }
+
+		.sleep-form .field {
+			flex: 1 1 40%;
+			min-width: 130px;
+		}
+
+		.sleep-form input { width: 100%; box-sizing: border-box; }
+
+		.btn-primary {
+			align-self: stretch;
+			text-align: center;
+		}
+
+		.sleep-entry {
+			flex-wrap: wrap;
+			padding: 10px 12px;
+		}
+
+		.sleep-right {
+			width: 100%;
+			justify-content: flex-end;
+		}
+
+		.gallery {
+			grid-template-columns: repeat(2, 1fr);
+		}
 	}
 </style>
