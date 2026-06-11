@@ -1,0 +1,4 @@
+node_modules/
+Backend/uploads/
+Backend/fitnesstracker.db
+.DS_Store

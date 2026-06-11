@@ -65,26 +65,38 @@
 
 	let bodyChart = $derived.by(() => {
 		if (!stats || stats.body.history.length < 2) return null;
+		const datasets = [
+			{
+				label: `${$t('stats.weight')} (kg)`,
+				data: stats.body.history.map(m => m.weight_kg),
+				borderColor: '#4a90e2',
+				backgroundColor: 'rgba(74, 144, 226, 0.15)',
+				tension: 0.3,
+				yAxisID: 'y'
+			},
+			{
+				label: $t('stats.bmi'),
+				data: stats.body.history.map(m => m.bmi),
+				borderColor: '#e0a040',
+				backgroundColor: 'rgba(224, 160, 64, 0.15)',
+				tension: 0.3,
+				yAxisID: 'y1'
+			}
+		];
+		if (stats.body.history.some(m => m.body_fat_percent != null)) {
+			datasets.push({
+				label: `${$t('stats.bodyFat')} (%)`,
+				data: stats.body.history.map(m => m.body_fat_percent),
+				borderColor: '#4caf80',
+				backgroundColor: 'rgba(76, 175, 128, 0.15)',
+				tension: 0.3,
+				spanGaps: true,
+				yAxisID: 'y1'
+			});
+		}
 		return {
 			labels: stats.body.history.map(m => fmtDate(m.date)),
-			datasets: [
-				{
-					label: `${$t('stats.weight')} (kg)`,
-					data: stats.body.history.map(m => m.weight_kg),
-					borderColor: '#4a90e2',
-					backgroundColor: 'rgba(74, 144, 226, 0.15)',
-					tension: 0.3,
-					yAxisID: 'y'
-				},
-				{
-					label: $t('stats.bmi'),
-					data: stats.body.history.map(m => m.bmi),
-					borderColor: '#e0a040',
-					backgroundColor: 'rgba(224, 160, 64, 0.15)',
-					tension: 0.3,
-					yAxisID: 'y1'
-				}
-			]
+			datasets
 		};
 	});
 
@@ -135,6 +147,19 @@
 				backgroundColor: ['#4a90e2', '#4caf80', '#e0a040'],
 				borderColor: '#1a1f2e',
 				borderWidth: 2
+			}]
+		};
+	});
+
+	let sleepChart = $derived.by(() => {
+		if (!stats || !stats.sleep.perDay || stats.sleep.perDay.length === 0) return null;
+		return {
+			labels: stats.sleep.perDay.map(r => fmtDate(r.date)),
+			datasets: [{
+				label: $t('stats.sleepChart'),
+				data: stats.sleep.perDay.map(r => +(r.duration_min / 60).toFixed(1)),
+				backgroundColor: '#9a7ae2',
+				borderRadius: 6
 			}]
 		};
 	});
@@ -326,6 +351,10 @@
 						<span class="stat-label">{$t('stats.sleepEntries')}</span>
 					</div>
 				</div>
+				{#if sleepChart}
+					<span class="chart-title">{$t('stats.sleepChart')}</span>
+					<StatChart type="bar" data={sleepChart} height={200} />
+				{/if}
 			{:else}
 				<p class="empty">{$t('stats.noSleepData')}</p>
 			{/if}
@@ -378,6 +407,7 @@
 		flex-direction: column;
 		gap: 24px;
 		max-width: 900px;
+		margin: 0 auto;
 	}
 
 	.header {

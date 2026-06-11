@@ -113,6 +113,40 @@
 		} catch {}
 	}
 
+	// Körperfett nach US-Navy-Formel (metrisch, log10)
+	let gender = $state('m');
+	let neck = $state('');
+	let waist = $state('');
+	let hip = $state('');
+
+	let bodyFat = $derived.by(() => {
+		const h = parseFloat(height);
+		const n = parseFloat(neck);
+		const w = parseFloat(waist);
+		const hi = parseFloat(hip);
+		if (!h || !n || !w) return null;
+
+		let value;
+		if (gender === 'm') {
+			if (w - n <= 0) return null;
+			value = 495 / (1.0324 - 0.19077 * Math.log10(w - n) + 0.15456 * Math.log10(h)) - 450;
+		} else {
+			if (!hi || w + hi - n <= 0) return null;
+			value = 495 / (1.29579 - 0.35004 * Math.log10(w + hi - n) + 0.221 * Math.log10(h)) - 450;
+		}
+		if (!Number.isFinite(value) || value < 2 || value > 70) return null;
+		return Math.round(value * 10) / 10;
+	});
+
+	let bodyFatCategory = $derived.by(() => {
+		if (bodyFat === null) return null;
+		const limits = gender === 'm' ? [6, 18, 25] : [14, 25, 32];
+		if (bodyFat < limits[0]) return { key: 'profile.bfLow', color: '#4a90e2' };
+		if (bodyFat < limits[1]) return { key: 'profile.bfFit', color: '#4caf80' };
+		if (bodyFat < limits[2]) return { key: 'profile.bfAverage', color: '#e0a040' };
+		return { key: 'profile.bfHigh', color: '#e06060' };
+	});
+
 	async function saveMeasurement() {
 		const w = parseFloat(weight);
 		const h = parseFloat(height);
@@ -124,7 +158,7 @@
 			const res = await fetch('http://localhost:3000/api/profile/measurements', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${$token}` },
-				body: JSON.stringify({ weight_kg: w, height_cm: h })
+				body: JSON.stringify({ weight_kg: w, height_cm: h, body_fat_percent: bodyFat })
 			});
 			const data = await res.json();
 			if (!res.ok) { bodyError = data.message; return; }
@@ -188,7 +222,7 @@
 		<h3>{$t('profile.body')}</h3>
 		{#if lastMeasurement}
 			<p class="last-measurement">
-				{$t('profile.lastMeasurement')}: {lastMeasurement.weight_kg} kg · {lastMeasurement.height_cm} cm · BMI {lastMeasurement.bmi}
+				{$t('profile.lastMeasurement')}: {lastMeasurement.weight_kg} kg · {lastMeasurement.height_cm} cm · BMI {lastMeasurement.bmi}{#if lastMeasurement.body_fat_percent != null} · {$t('profile.bodyFatResult')} {lastMeasurement.body_fat_percent} %{/if}
 			</p>
 		{/if}
 		<div class="fields body-fields">
@@ -222,6 +256,42 @@
 			</div>
 		{/if}
 
+		<!-- Körperfett (US Navy) -->
+		<h3 class="subhead">{$t('profile.bodyFatTitle')}</h3>
+		<div class="fields body-fields">
+			<div class="field">
+				<label for="p-gender">{$t('profile.gender')}</label>
+				<select id="p-gender" bind:value={gender} disabled={bodyLoading}>
+					<option value="m">{$t('profile.male')}</option>
+					<option value="f">{$t('profile.female')}</option>
+				</select>
+			</div>
+			<div class="field">
+				<label for="p-neck">{$t('profile.neck')}</label>
+				<input id="p-neck" type="number" min="15" max="80" step="0.5" bind:value={neck} disabled={bodyLoading} />
+			</div>
+			<div class="field">
+				<label for="p-waist">{$t('profile.waist')}</label>
+				<input id="p-waist" type="number" min="40" max="220" step="0.5" bind:value={waist} disabled={bodyLoading} />
+			</div>
+			{#if gender === 'f'}
+				<div class="field">
+					<label for="p-hip">{$t('profile.hip')}</label>
+					<input id="p-hip" type="number" min="40" max="220" step="0.5" bind:value={hip} disabled={bodyLoading} />
+				</div>
+			{/if}
+		</div>
+
+		{#if bodyFat !== null}
+			<div class="bmi-display">
+				<span class="bmi-label">{$t('profile.bodyFatResult')}</span>
+				<span class="bmi-value" style="color: {bodyFatCategory.color}">{bodyFat} %</span>
+				<span class="bmi-cat" style="color: {bodyFatCategory.color}">{$t(bodyFatCategory.key)}</span>
+			</div>
+		{:else}
+			<p class="last-measurement">{$t('profile.bodyFatHint')}</p>
+		{/if}
+
 		{#if bodyError}<p class="msg error">{bodyError}</p>{/if}
 		{#if bodyMsg}<p class="msg success">{bodyMsg}</p>{/if}
 		<button onclick={saveMeasurement} disabled={bodyLoading}>{$t('profile.saveMeasurement')}</button>
@@ -235,6 +305,7 @@
 		flex-direction: column;
 		gap: 24px;
 		max-width: 600px;
+		margin: 0 auto;
 	}
 
 	h2 { margin: 0; font-size: 22px; }
@@ -298,6 +369,27 @@
 
 	input:focus { border-color: #4a90e2; }
 	input:disabled { opacity: 0.5; }
+
+	select {
+		padding: 10px 13px;
+		background: #0f1419;
+		border: 1.5px solid #2a3040;
+		border-radius: 8px;
+		color: #e0e0e0;
+		font-size: 14px;
+		font-family: inherit;
+		outline: none;
+		transition: border-color 0.2s;
+	}
+
+	select:focus { border-color: #4a90e2; }
+	select:disabled { opacity: 0.5; }
+
+	.subhead {
+		margin-top: 8px;
+		padding-top: 16px;
+		border-top: 1px solid #232a3a;
+	}
 
 	button {
 		align-self: flex-start;

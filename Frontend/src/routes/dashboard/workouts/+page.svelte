@@ -2,6 +2,7 @@
 	import { token } from '$lib/userStore';
 	import { t, locale } from '$lib/i18n';
 	import { onDestroy } from 'svelte';
+	import { page } from '$app/stores';
 
 	const API = 'http://localhost:3000';
 
@@ -25,6 +26,7 @@
 		return { name: '', sets: 3, reps: 10, weight_kg: '' };
 	}
 	let form = $state({ title: '', duration_min: '', notes: '', exercises: [blankExercise()] });
+	let planId = $state(null);
 
 	async function loadWorkouts() {
 		loading = true;
@@ -39,8 +41,47 @@
 
 	function openModal() {
 		form = { title: '', duration_min: '', notes: '', exercises: [blankExercise()] };
+		planId = null;
 		formError = '';
 		showModal = true;
+	}
+
+	// Wird über "Workout starten" auf der Pläne-Seite aufgerufen:
+	// ?plan=<id>&day=<id> befüllt das Modal mit den Übungen des Plan-Tags
+	let prefillDone = false;
+	async function prefillFromPlan() {
+		if (prefillDone) return;
+		prefillDone = true;
+		const pId = parseInt($page.url.searchParams.get('plan'));
+		const dId = parseInt($page.url.searchParams.get('day'));
+		if (!pId || !dId) return;
+		try {
+			const res = await fetch(`${API}/api/plans`, {
+				headers: { Authorization: `Bearer ${$token}` }
+			});
+			if (!res.ok) return;
+			const plans = await res.json();
+			const plan = plans.find(p => p.id === pId);
+			const day = plan?.days.find(d => d.id === dId);
+			if (!plan || !day) return;
+
+			form = {
+				title: `${plan.name} – ${day.name?.trim() || `${$t('plans.day')} ${day.day_number}`}`,
+				duration_min: '',
+				notes: '',
+				exercises: day.exercises.length
+					? day.exercises.map(e => ({
+							name: e.name,
+							sets: e.sets,
+							reps: e.reps,
+							weight_kg: e.weight_kg ?? ''
+						}))
+					: [blankExercise()]
+			};
+			planId = plan.id;
+			formError = '';
+			showModal = true;
+		} catch {}
 	}
 
 	function closeModal() {
@@ -79,7 +120,8 @@
 					title: form.title.trim(),
 					duration_min: parseInt(form.duration_min) || 0,
 					notes: form.notes.trim(),
-					exercises
+					exercises,
+					plan_id: planId
 				})
 			});
 			if (res.ok) {
@@ -236,7 +278,7 @@
 
 	onDestroy(() => stopTimer());
 
-	$effect(() => { loadWorkouts(); });
+	$effect(() => { loadWorkouts(); prefillFromPlan(); });
 </script>
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && showModal) closeModal(); }} />
@@ -447,6 +489,7 @@
 		flex-direction: column;
 		gap: 24px;
 		max-width: 700px;
+		margin: 0 auto;
 	}
 
 	.header {

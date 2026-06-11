@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const db = require('./db');
 
 const app = express();
@@ -10,6 +13,22 @@ const SECRET = 'fitnesstracker_secret';
 
 app.use(cors());
 app.use(express.json());
+
+// Foto-Uploads: Dateien in Backend/uploads/, statisch ausgeliefert
+// (ohne Auth, damit <img src> direkt funktioniert)
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use('/uploads', express.static(UPLOAD_DIR));
+
+const upload = multer({
+    storage: multer.diskStorage({
+        destination: UPLOAD_DIR,
+        filename: (req, file, cb) =>
+            cb(null, `${req.user.id}-${Date.now()}${path.extname(file.originalname) || '.jpg'}`)
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/'))
+});
 
 function verifyToken(req, res, next) {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -59,7 +78,7 @@ app.get('/api/profile', verifyToken, (req, res) => {
     if (!userData) return res.status(404).json({ message: 'Benutzer nicht gefunden' });
 
     const measurement = db.prepare(
-        'SELECT weight_kg, height_cm, bmi, date FROM body_measurements WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 1'
+        'SELECT weight_kg, height_cm, bmi, body_fat_percent, date FROM body_measurements WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 1'
     ).get(req.user.id);
 
     res.json({ ...userData, measurement: measurement || null });
@@ -96,18 +115,23 @@ app.put('/api/profile/password', verifyToken, async (req, res) => {
 });
 
 app.post('/api/profile/measurements', verifyToken, (req, res) => {
-    const { weight_kg, height_cm } = req.body;
+    const { weight_kg, height_cm, body_fat_percent } = req.body;
     if (!weight_kg || !height_cm)
         return res.status(400).json({ message: 'Gewicht und Größe sind Pflicht' });
 
     const heightM = height_cm / 100;
     const bmi = Math.round((weight_kg / (heightM * heightM)) * 10) / 10;
 
-    db.prepare(
-        'INSERT INTO body_measurements (user_id, weight_kg, height_cm, bmi) VALUES (?, ?, ?, ?)'
-    ).run(req.user.id, weight_kg, height_cm, bmi);
+    let bodyFat = parseFloat(body_fat_percent);
+    bodyFat = Number.isFinite(bodyFat) && bodyFat >= 2 && bodyFat <= 70
+        ? Math.round(bodyFat * 10) / 10
+        : null;
 
-    res.status(201).json({ weight_kg, height_cm, bmi });
+    db.prepare(
+        'INSERT INTO body_measurements (user_id, weight_kg, height_cm, bmi, body_fat_percent) VALUES (?, ?, ?, ?, ?)'
+    ).run(req.user.id, weight_kg, height_cm, bmi, bodyFat);
+
+    res.status(201).json({ weight_kg, height_cm, bmi, body_fat_percent: bodyFat });
 });
 
 //Nutrition
@@ -217,12 +241,19 @@ app.get('/api/workouts', verifyToken, (req, res) => {
 });
 
 app.post('/api/workouts', verifyToken, (req, res) => {
-    const { title, duration_min, notes, exercises } = req.body;
+    const { title, duration_min, notes, exercises, plan_id } = req.body;
     if (!title || !title.trim())
         return res.status(400).json({ message: 'Titel ist Pflicht' });
 
+    // plan_id nur übernehmen, wenn der Plan dem User gehört
+    let planId = null;
+    if (plan_id) {
+        const plan = db.prepare('SELECT id FROM training_plans WHERE id = ? AND user_id = ?').get(plan_id, req.user.id);
+        if (plan) planId = plan.id;
+    }
+
     const insertSession = db.prepare(
-        'INSERT INTO workout_sessions (user_id, title, duration_min, notes) VALUES (?, ?, ?, ?)'
+        'INSERT INTO workout_sessions (user_id, plan_id, title, duration_min, notes) VALUES (?, ?, ?, ?, ?)'
     );
     const findExercise = db.prepare('SELECT id FROM exercises WHERE name = ?');
     const insertExercise = db.prepare('INSERT INTO exercises (name) VALUES (?)');
@@ -231,7 +262,7 @@ app.post('/api/workouts', verifyToken, (req, res) => {
     );
 
     const create = db.transaction(() => {
-        const r = insertSession.run(req.user.id, title.trim(), parseInt(duration_min) || 0, notes?.trim() || null);
+        const r = insertSession.run(req.user.id, planId, title.trim(), parseInt(duration_min) || 0, notes?.trim() || null);
         const sessionId = r.lastInsertRowid;
 
         for (const ex of (Array.isArray(exercises) ? exercises : [])) {
@@ -264,6 +295,216 @@ app.delete('/api/workouts/:id', verifyToken, (req, res) => {
 
     db.prepare('DELETE FROM workout_sets WHERE session_id = ?').run(id);
     db.prepare('DELETE FROM workout_sessions WHERE id = ?').run(id);
+    res.json({ message: 'Gelöscht' });
+});
+
+//Trainingspläne
+
+// Lädt Pläne inkl. Tagen und Übungen verschachtelt
+function getPlansNested(userId, planId = null) {
+    const plans = planId
+        ? db.prepare('SELECT id, name, description, created_at FROM training_plans WHERE user_id = ? AND id = ?').all(userId, planId)
+        : db.prepare('SELECT id, name, description, created_at FROM training_plans WHERE user_id = ? ORDER BY created_at DESC, id DESC').all(userId);
+    if (plans.length === 0) return plans;
+
+    const planIds = plans.map(p => p.id);
+    const planPh = planIds.map(() => '?').join(',');
+    const days = db.prepare(
+        `SELECT id, plan_id, day_number, name FROM plan_days WHERE plan_id IN (${planPh}) ORDER BY day_number, id`
+    ).all(...planIds);
+
+    const exercisesByDay = {};
+    if (days.length > 0) {
+        const dayIds = days.map(d => d.id);
+        const dayPh = dayIds.map(() => '?').join(',');
+        const rows = db.prepare(`
+            SELECT pe.id, pe.day_id, pe.sets, pe.reps, pe.weight_kg, pe.rest_sec, ex.name
+            FROM plan_exercises pe
+            JOIN exercises ex ON pe.exercise_id = ex.id
+            WHERE pe.day_id IN (${dayPh})
+            ORDER BY pe.order_index, pe.id
+        `).all(...dayIds);
+        for (const r of rows) (exercisesByDay[r.day_id] ||= []).push(r);
+    }
+
+    const daysByPlan = {};
+    for (const d of days) (daysByPlan[d.plan_id] ||= []).push({ ...d, exercises: exercisesByDay[d.id] || [] });
+    return plans.map(p => ({ ...p, days: daysByPlan[p.id] || [] }));
+}
+
+// Fügt Tage + Übungen eines Plans ein (innerhalb einer Transaktion aufrufen)
+function insertPlanDays(planId, days) {
+    const insertDay = db.prepare('INSERT INTO plan_days (plan_id, day_number, name) VALUES (?, ?, ?)');
+    const findExercise = db.prepare('SELECT id FROM exercises WHERE name = ?');
+    const insertExercise = db.prepare('INSERT INTO exercises (name) VALUES (?)');
+    const insertPlanExercise = db.prepare(
+        'INSERT INTO plan_exercises (day_id, exercise_id, sets, reps, weight_kg, rest_sec, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+
+    (Array.isArray(days) ? days : []).forEach((day, di) => {
+        const dayId = insertDay.run(
+            planId,
+            parseInt(day.day_number) || di + 1,
+            (day.name || '').trim() || null
+        ).lastInsertRowid;
+
+        (Array.isArray(day.exercises) ? day.exercises : []).forEach((ex, ei) => {
+            const name = (ex.name || '').trim();
+            if (!name) return;
+            let row = findExercise.get(name);
+            if (!row) row = { id: insertExercise.run(name).lastInsertRowid };
+
+            const weight = parseFloat(ex.weight_kg);
+            insertPlanExercise.run(
+                dayId,
+                row.id,
+                Math.min(20, Math.max(1, parseInt(ex.sets) || 3)),
+                parseInt(ex.reps) || 10,
+                Number.isFinite(weight) ? weight : null,
+                parseInt(ex.rest_sec) || 60,
+                ei
+            );
+        });
+    });
+}
+
+app.get('/api/plans', verifyToken, (req, res) => {
+    res.json(getPlansNested(req.user.id));
+});
+
+app.post('/api/plans', verifyToken, (req, res) => {
+    const { name, description, days } = req.body;
+    if (!name || !name.trim())
+        return res.status(400).json({ message: 'Name ist Pflicht' });
+
+    const create = db.transaction(() => {
+        const r = db.prepare('INSERT INTO training_plans (user_id, name, description) VALUES (?, ?, ?)')
+            .run(req.user.id, name.trim(), description?.trim() || null);
+        insertPlanDays(r.lastInsertRowid, days);
+        return r.lastInsertRowid;
+    });
+
+    const planId = create();
+    res.status(201).json(getPlansNested(req.user.id, planId)[0]);
+});
+
+app.put('/api/plans/:id', verifyToken, (req, res) => {
+    const id = parseInt(req.params.id);
+    const plan = db.prepare('SELECT id FROM training_plans WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!plan) return res.status(404).json({ message: 'Plan nicht gefunden' });
+
+    const { name, description, days } = req.body;
+    if (!name || !name.trim())
+        return res.status(400).json({ message: 'Name ist Pflicht' });
+
+    // Tage/Übungen komplett neu schreiben statt Diff – einfach und robust
+    const update = db.transaction(() => {
+        db.prepare('UPDATE training_plans SET name = ?, description = ? WHERE id = ?')
+            .run(name.trim(), description?.trim() || null, id);
+        db.prepare('DELETE FROM plan_exercises WHERE day_id IN (SELECT id FROM plan_days WHERE plan_id = ?)').run(id);
+        db.prepare('DELETE FROM plan_days WHERE plan_id = ?').run(id);
+        insertPlanDays(id, days);
+    });
+    update();
+
+    res.json(getPlansNested(req.user.id, id)[0]);
+});
+
+app.delete('/api/plans/:id', verifyToken, (req, res) => {
+    const id = parseInt(req.params.id);
+    const plan = db.prepare('SELECT id FROM training_plans WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!plan) return res.status(404).json({ message: 'Plan nicht gefunden' });
+
+    const remove = db.transaction(() => {
+        db.prepare('DELETE FROM plan_exercises WHERE day_id IN (SELECT id FROM plan_days WHERE plan_id = ?)').run(id);
+        db.prepare('DELETE FROM plan_days WHERE plan_id = ?').run(id);
+        db.prepare('UPDATE workout_sessions SET plan_id = NULL WHERE plan_id = ?').run(id);
+        db.prepare('DELETE FROM training_plans WHERE id = ?').run(id);
+    });
+    remove();
+
+    res.json({ message: 'Gelöscht' });
+});
+
+//Schlaf
+
+app.get('/api/sleep', verifyToken, (req, res) => {
+    const entries = db.prepare(
+        'SELECT id, sleep_start, sleep_end, duration_min, quality, date FROM sleep_logs WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 90'
+    ).all(req.user.id);
+    res.json(entries);
+});
+
+app.post('/api/sleep', verifyToken, (req, res) => {
+    const { date, bed_time, wake_time, quality } = req.body;
+    const timeRe = /^\d{2}:\d{2}$/;
+    const day = (date || new Date().toISOString().split('T')[0]);
+    if (!timeRe.test(bed_time || '') || !timeRe.test(wake_time || ''))
+        return res.status(400).json({ message: 'Fehlende Felder' });
+    const q = parseInt(quality);
+    if (!Number.isInteger(q) || q < 1 || q > 5)
+        return res.status(400).json({ message: 'Ungültige Qualität' });
+
+    // Zubettgehzeit nach der Aufwachzeit → Einschlafen war am Vortag
+    const startDay = bed_time > wake_time ? shiftDate(day, -1) : day;
+    const sleepStart = `${startDay} ${bed_time}`;
+    const sleepEnd = `${day} ${wake_time}`;
+    const durationMin = Math.round(
+        (new Date(sleepEnd.replace(' ', 'T')) - new Date(sleepStart.replace(' ', 'T'))) / 60000
+    );
+    if (durationMin <= 0)
+        return res.status(400).json({ message: 'Ungültige Zeiten' });
+
+    const r = db.prepare(
+        'INSERT INTO sleep_logs (user_id, sleep_start, sleep_end, duration_min, quality, date) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(req.user.id, sleepStart, sleepEnd, durationMin, q, day);
+
+    const entry = db.prepare(
+        'SELECT id, sleep_start, sleep_end, duration_min, quality, date FROM sleep_logs WHERE id = ?'
+    ).get(r.lastInsertRowid);
+    res.status(201).json(entry);
+});
+
+app.delete('/api/sleep/:id', verifyToken, (req, res) => {
+    const id = parseInt(req.params.id);
+    const entry = db.prepare('SELECT id FROM sleep_logs WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!entry) return res.status(404).json({ message: 'Eintrag nicht gefunden' });
+    db.prepare('DELETE FROM sleep_logs WHERE id = ?').run(id);
+    res.json({ message: 'Gelöscht' });
+});
+
+//Progress-Fotos
+
+app.post('/api/photos', verifyToken, upload.single('photo'), (req, res) => {
+    if (!req.file)
+        return res.status(400).json({ message: 'Bitte ein Bild auswählen' });
+
+    const date = req.body.date || new Date().toISOString().split('T')[0];
+    const filePath = '/uploads/' + req.file.filename;
+    const r = db.prepare(
+        'INSERT INTO progress_photos (user_id, file_path, note, date) VALUES (?, ?, ?, ?)'
+    ).run(req.user.id, filePath, req.body.note?.trim() || null, date);
+
+    const photo = db.prepare(
+        'SELECT id, file_path, note, date FROM progress_photos WHERE id = ?'
+    ).get(r.lastInsertRowid);
+    res.status(201).json(photo);
+});
+
+app.get('/api/photos', verifyToken, (req, res) => {
+    const photos = db.prepare(
+        'SELECT id, file_path, note, date FROM progress_photos WHERE user_id = ? ORDER BY date DESC, id DESC'
+    ).all(req.user.id);
+    res.json(photos);
+});
+
+app.delete('/api/photos/:id', verifyToken, (req, res) => {
+    const id = parseInt(req.params.id);
+    const photo = db.prepare('SELECT id, file_path FROM progress_photos WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!photo) return res.status(404).json({ message: 'Foto nicht gefunden' });
+
+    fs.unlink(path.join(__dirname, photo.file_path), () => {});
+    db.prepare('DELETE FROM progress_photos WHERE id = ?').run(id);
     res.json({ message: 'Gelöscht' });
 });
 
@@ -406,6 +647,12 @@ app.get('/api/stats', verifyToken, (req, res) => {
                ROUND(AVG(quality), 1) AS avg_quality
         FROM sleep_logs WHERE user_id = ?
     `).get(uid);
+    const sleepPerDay = db.prepare(`
+        SELECT date, SUM(duration_min) AS duration_min, ROUND(AVG(quality), 1) AS quality
+        FROM sleep_logs
+        WHERE user_id = ? AND date >= date('now', ?)
+        GROUP BY date ORDER BY date
+    `).all(uid, since);
 
     // Trainingspläne
     const plans = db.prepare(
@@ -446,7 +693,8 @@ app.get('/api/stats', verifyToken, (req, res) => {
         sleep: {
             count: sleep.count,
             avgDurationMin: sleep.avg_duration_min,
-            avgQuality: sleep.avg_quality
+            avgQuality: sleep.avg_quality,
+            perDay: sleepPerDay
         },
         plans: { count: plans.length, list: plans },
         photos: { count: photoCount.count, latest: latestPhoto || null }
